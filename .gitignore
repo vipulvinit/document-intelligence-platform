@@ -118,4 +118,9 @@ docker-compose.override.yml
 # ===========================
 *.bak
 *.swp
-*.swo
+*.swodata/
+*.db
+.env
+.pytest_cache/
+.ruff_cache/
+__pycache__/

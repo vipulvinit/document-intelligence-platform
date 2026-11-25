@@ -13,9 +13,17 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
     "loguru>=0.7.3",
+    "python-multipart>=0.0.9",
+    "psycopg[binary]>=3.2",
+    "pymupdf>=1.24",
+    "openai>=1.40",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
+embeddings = ["fastembed>=0.3"]
+ocr = ["pytesseract>=0.3", "pillow>=10"]
+
 dev = [
     "black>=25.1.0",
     "ruff>=0.12.5",
@@ -27,11 +35,11 @@ dev = [
 ]
 
 [tool.black]
-line-length = 88
+line-length = 110
 target-version = ["py311"]
 
 [tool.ruff]
-line-length = 88
+line-length = 110
 
 [tool.ruff.lint]
 select = [
