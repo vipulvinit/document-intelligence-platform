@@ -1,3 +1,3 @@
-from app.api.routes import documents, generation, qa
+from app.api.routes import articles, qa, sources
 
-__all__ = ["documents", "generation", "qa"]
+__all__ = ["articles", "qa", "sources"]

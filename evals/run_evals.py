@@ -1,8 +1,9 @@
-"""Evaluation suite: retrieval hit rate, grounded answers, refusals, injection resistance, PII.
+"""Evaluation suite: retrieval hit rate, grounded answers, refusals, emergencies, injection, PII.
 
 Run offline:  LLM_PROVIDER=mock EMBEDDING_BACKEND=hashing python -m evals.run_evals
-Run against your real model (uses .env):      python -m evals.run_evals
-Re-run it after every prompt or model change to catch regressions.
+Run against your configured model (uses .env: Groq, Gemini, Ollama...):  python -m evals.run_evals
+Re-run it after every prompt or model change to catch regressions. The judge agent (next step)
+adds LLM-graded faithfulness and relevance scores on top of these exact checks.
 """
 
 import json
@@ -13,41 +14,47 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.mkdtemp()}/eval.db")
+_tmp = tempfile.mkdtemp()
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmp}/eval.db")
+os.environ.setdefault("STORAGE_DIR", f"{_tmp}/objects")
+os.environ.setdefault("SEED_DEFAULT_SOURCES", "False")
 
 from app.core.logging import setup_logging  # noqa: E402
-from app.db.session import get_session, init_engine  # noqa: E402
+from app.db.session import init_engine, new_session  # noqa: E402
 from app.llm.client import get_llm_client  # noqa: E402
-from app.services.document_service import get_document, ingest_document  # noqa: E402
+from app.services.ingestion_service import ingest_upload  # noqa: E402
 from app.services.qa_service import ask  # noqa: E402
 from app.services.retrieval_service import search  # noqa: E402
 
 
 def main() -> int:
     setup_logging("WARNING")
-    spec = json.loads((ROOT / "evals" / "eval_cases.json").read_text())
+    spec = json.loads((ROOT / "evals" / "eval_cases.json").read_text(encoding="utf-8"))
     init_engine()
-    db = next(get_session())
+    db = new_session()
     llm = get_llm_client()
+    ids = {}
     for d in spec["documents"]:
-        if not get_document(db, d["name"]):
-            path = ROOT / "samples" / d["file"]
-            ingest_document(db, d["name"], path.name, path.read_bytes())
+        path = ROOT / "samples" / d["file"]
+        ids[d["title"]] = ingest_upload(db, d["title"], path.name, path.read_bytes()).article.id
 
     rows, passed = [], 0
     for case in spec["cases"]:
-        doc = case.get("document")
-        result = ask(db, llm, case["question"], doc)
+        scope = [ids[case["document"]]] if case.get("document") else None
+        result = ask(db, llm, case["question"], scope)
         answer = result["answer"]
         if case["type"] == "answer":
-            hits = search(db, case["question"], doc, top_k=3)
+            hits = search(db, case["question"], scope, top_k=3)
             retrieved = any(case["expect_key"] in h.node_keys for h in hits)
-            cited = any(c.endswith("#" + case["expect_key"]) for c in result["citations"])
+            cited = any(c["key"].endswith("#" + case["expect_key"]) for c in result["citations"])
             ok = retrieved and cited and case["expect_text"].lower() in answer.lower()
             detail = f"hit@3={retrieved} cited={cited}"
         elif case["type"] == "refuse":
             ok = not result["grounded"]
             detail = "refused" if ok else "answered"
+        elif case["type"] == "emergency":
+            ok = result.get("emergency") == case["expect"]
+            detail = f"emergency={result.get('emergency')}"
         else:  # injection / pii: forbidden strings must not appear
             leaked = [s for s in case["must_not_contain"] if s.lower() in answer.lower()]
             ok = not leaked

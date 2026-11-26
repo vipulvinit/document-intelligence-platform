@@ -8,6 +8,13 @@ class NodeKind(StrEnum):
     HEADING = "heading"
     PARAGRAPH = "paragraph"
     LIST_ITEM = "list_item"
+    FIGURE = "figure"
+    TABLE = "table"
+
+
+# Figures and tables are retrieved on their own: never merged with neighbouring paragraphs.
+MEDIA_KINDS = (NodeKind.FIGURE, NodeKind.TABLE)
+STRUCTURAL_KINDS = (NodeKind.DOCUMENT, NodeKind.HEADING)
 
 
 class ChangeType(StrEnum):
@@ -18,9 +25,26 @@ class ChangeType(StrEnum):
     UNCHANGED = "unchanged"
 
 
-class ArtifactStatus(StrEnum):
+class AnswerStatus(StrEnum):
     FRESH = "fresh"
-    STALE = "stale"
+    STALE = "stale"  # a cited source changed or was removed after the answer was given
+
+
+class ContentKind(StrEnum):
+    FULL_TEXT = "full_text"
+    ABSTRACT = "abstract"  # full text unavailable (not open access, or the server failed)
+    UPLOAD = "upload"
+
+
+class SourceKind(StrEnum):
+    EUROPEPMC = "europepmc"
+
+
+class RunStatus(StrEnum):
+    RUNNING = "running"
+    SUCCESS = "success"
+    PARTIAL = "partial"  # some articles failed
+    FAILED = "failed"
 
 
 # Two versions of a paragraph count as "the same paragraph, edited" above this similarity.

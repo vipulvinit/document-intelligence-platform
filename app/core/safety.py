@@ -41,3 +41,76 @@ def wrap_untrusted(text: str, label: str = "document") -> str:
     """Delimit untrusted content so the model can tell data apart from instructions."""
     cleaned = text.replace("<<<", "").replace(">>>", "")  # stop content from closing the fence
     return f"<<<{label}\n{cleaned}\n{label}>>>"
+
+
+# ── Medical emergencies ──────────────────────────────────────────────────────
+# A helpline must not answer "crushing chest pain right now" with a literature summary.
+# These patterns catch common phrasings of emergencies; a match returns emergency guidance
+# instead of a RAG answer. Pattern matching misses some phrasings: it is a safety net, not triage.
+
+_EMERGENCY_PATTERNS: dict[str, list[str]] = {
+    "self_harm": [
+        r"\b(kill|hurt|harm)(ing)? myself\b",
+        r"\bsuicid",
+        r"\bend (my|it all|my life)\b",
+        r"\bwant to die\b",
+        r"\b(took|taken|swallowed|had) (an? )?overdose\b",
+        r"\boverdosed\b",
+    ],
+    "cardiac": [
+        r"\bchest (pain|tightness|pressure)\b.*\b(now|right now|sudden|severe|spreading|arm|jaw|sweat)",
+        r"\b(severe|sudden|crushing) chest (pain|tightness|pressure)\b",
+        r"\bheart attack\b.*\b(now|having|think)",
+    ],
+    "stroke": [
+        r"\b(face|mouth) (is )?(drooping|droops)\b",
+        r"\bslurred speech\b",
+        r"\bsudden(ly)? (weakness|numbness|can'?t (move|speak|see))\b",
+        r"\bstroke\b.*\b(now|having|think)",
+    ],
+    "breathing": [
+        r"\b(can'?t|cannot|unable to|struggling to) breathe?\b",
+        r"\b(lips|face) (turning |are |is )?(blue|grey|gray)\b",
+        r"\bchok(ing|ed)\b",
+    ],
+    "other": [
+        r"\bunconscious\b",
+        r"\b(not|isn'?t|won'?t) (waking up|breathing|responding)\b",
+        r"\bseizure\b.*\b(now|won'?t stop|still)\b",
+        r"\b(heavy|severe|uncontrolled) bleeding\b",
+        r"\b(swallowed|drank|ate|took)\b.*\b(poison|bleach|pesticide|rat killer|kerosene)\b",
+        r"\b(i|he|she|they|my \w+) (was|were|got|is|am) poisoned\b",
+        r"\banaphyla\w*\b.*\b(now|having)\b",
+        r"\bthroat (is )?(closing|swelling)\b",
+    ],
+}
+_EMERGENCY_RE = {k: re.compile("|".join(v), re.IGNORECASE) for k, v in _EMERGENCY_PATTERNS.items()}
+
+
+def detect_emergency(text: str) -> str | None:
+    """The emergency category the message looks like, or None."""
+    for category, pattern in _EMERGENCY_RE.items():
+        if pattern.search(text):
+            return category
+    return None
+
+
+def emergency_message(category: str, emergency_number: str, mental_health_line: str) -> str:
+    if category == "self_harm":
+        return (
+            "It sounds like you may be going through something very difficult. You don't have to face "
+            f"it alone. Please call {mental_health_line} now to talk to a trained counsellor, or "
+            f"{emergency_number} if you are in immediate danger. If you can, reach out to someone you "
+            "trust and stay with them."
+        )
+    return (
+        f"This may be a medical emergency. Call {emergency_number} or go to the nearest emergency "
+        "department now. Do not wait for an online answer. If someone is unresponsive or not "
+        "breathing, call for help immediately."
+    )
+
+
+DISCLAIMER = (
+    "This information comes from published medical literature and is not a diagnosis or medical "
+    "advice. Please consult a qualified doctor about your situation."
+)

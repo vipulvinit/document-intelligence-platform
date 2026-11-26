@@ -2,6 +2,7 @@
 
 import re
 
+from app.parsers.jats_parser import parse_jats
 from app.parsers.pdf_parser import parse_pdf
 from app.schemas.node import RawBlock
 
@@ -19,7 +20,9 @@ def extract_blocks(filename: str, data: bytes) -> list[RawBlock]:
         return parse_pdf(data)
     if name.endswith((".md", ".markdown", ".txt")):
         return parse_markdown(data.decode("utf-8", errors="replace"))
-    raise UnsupportedFileType(f"Unsupported file type: {filename}. Use PDF, Markdown or TXT.")
+    if name.endswith(".xml"):
+        return parse_jats(data).blocks
+    raise UnsupportedFileType(f"Unsupported file type: {filename}. Use PDF, JATS XML, Markdown or TXT.")
 
 
 def parse_markdown(text: str) -> list[RawBlock]:

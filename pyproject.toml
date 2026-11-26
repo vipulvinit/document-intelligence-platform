@@ -1,10 +1,11 @@
 [project]
-name = "document-intelligence-platform"
-version = "0.1.0"
-description = "Backend platform for intelligent document parsing, versioning, traceability, and AI-assisted QA generation."
+name = "medical-helpline"
+version = "0.2.0"
+description = "Automated medical helpline: ingests open-access medical literature on a schedule and answers questions with verified citations."
 readme = "README.md"
 requires-python = ">=3.11"
 
+# Everything here is free and runs locally: no paid API is required.
 dependencies = [
     "fastapi>=0.116.0",
     "uvicorn[standard]>=0.35.0",
@@ -14,22 +15,25 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "loguru>=0.7.3",
     "python-multipart>=0.0.9",
-    "psycopg[binary]>=3.2",
     "pymupdf>=1.24",
-    "openai>=1.40",
+    "openai>=1.40",          # client library only: works with any OpenAI-compatible API (Groq, Gemini...)
     "rank-bm25>=0.2.2",
+    "numpy>=1.26",
+    "httpx>=0.28.1",
+    "apscheduler>=3.10,<4",
+    "pillow>=10",            # converts figure images (WebP, large files) before a vision model sees them
 ]
 
 [project.optional-dependencies]
 embeddings = ["fastembed>=0.3"]
-ocr = ["pytesseract>=0.3", "pillow>=10"]
+ocr = ["pytesseract>=0.3"]
+postgres = ["psycopg[binary]>=3.2"]
 
 dev = [
     "black>=25.1.0",
     "ruff>=0.12.5",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
-    "httpx>=0.28.1",
     "mypy>=1.17.1",
     "pre-commit>=4.2.0",
 ]

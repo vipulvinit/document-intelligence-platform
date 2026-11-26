@@ -3,7 +3,8 @@
 Heading detection for PDFs: a block is a heading if its font is clearly larger than the
 body text, or it is short, bold and doesn't end like a sentence. Larger fonts map to
 higher levels. Each node gets a stable key built from its heading path, for example
-"3-data-validation/edit-checks/p2".
+"3-data-validation/edit-checks/p2". Figures and tables get keys from their label, for
+example "results/figure-2", and are never merged into paragraphs.
 """
 
 import re
@@ -30,6 +31,8 @@ def _assign_heading_levels(blocks: list[RawBlock]) -> list[int | None]:
     body_size = Counter(sizes).most_common(1)[0][0]
 
     def is_heading(b: RawBlock) -> bool:
+        if b.media_kind is not None:
+            return False
         short = len(b.text) <= 90 and not b.text.endswith((".", ":", ";", ","))
         bigger = (b.font_size or 0) >= body_size + 1.5
         return short and (bigger or (b.bold and not b.is_list_item))
@@ -39,12 +42,20 @@ def _assign_heading_levels(blocks: list[RawBlock]) -> list[int | None]:
     return [size_to_level[b.font_size or body_size] if is_heading(b) else None for b in blocks]
 
 
-def build_hierarchy(blocks: list[RawBlock], title: str) -> ParsedDocument:
+def _media_text(block: RawBlock) -> str:
+    head = f"{block.label}: {block.text}" if block.label else block.text
+    if block.table_markdown:
+        return f"{head}\n{block.table_markdown}"
+    return head
+
+
+def build_hierarchy(blocks: list[RawBlock], title: str, detect_title: bool = True) -> ParsedDocument:
+    """`detect_title=False` when the title is already known (JATS XML gives it in the metadata)."""
     levels = _assign_heading_levels(blocks)
     # A single top-level heading at the very start is the document's own title: use it as the
     # root instead of nesting every section under it (keeps node keys short and stable).
     heading_levels = [lv for lv in levels if lv is not None]
-    if levels and levels[0] is not None and heading_levels.count(min(heading_levels)) == 1:
+    if detect_title and levels and levels[0] is not None and heading_levels.count(min(heading_levels)) == 1:
         title = blocks[0].text
         blocks, levels = blocks[1:], levels[1:]
     root_key = "root"
@@ -94,6 +105,36 @@ def build_hierarchy(blocks: list[RawBlock], title: str) -> ParsedDocument:
                 )
             )
             stack.append((level, key, block.text))
+        elif block.media_kind is not None:
+            parent_level, parent_key, _ = stack[-1]
+            kind = NodeKind(block.media_kind)
+            child_counts[(parent_key, kind)] += 1
+            fallback = f"{'fig' if kind == NodeKind.FIGURE else 'table'}{child_counts[(parent_key, kind)]}"
+            local = slugify(block.label) if block.label else fallback
+            key = unique(f"{parent_key}/{local}" if parent_key != root_key else local)
+            text = _media_text(block)
+            nodes.append(
+                ParsedNode(
+                    node_key=key,
+                    parent_key=parent_key,
+                    kind=kind,
+                    level=min(parent_level + 1, 6),
+                    title=block.label,
+                    text=text,
+                    heading_path=" > ".join(t for _, _, t in stack[1:]),
+                    page=block.page,
+                    position=len(nodes),
+                    content_hash=content_hash(text),
+                    asset_ref=block.asset_ref,
+                    asset_bytes=block.asset_bytes,
+                    asset_ext=block.asset_ext,
+                    extra={
+                        "label": block.label,
+                        "caption": block.text,
+                        **({"table_markdown": block.table_markdown} if block.table_markdown else {}),
+                    },
+                )
+            )
         else:
             parent_level, parent_key, _ = stack[-1]
             child_counts[parent_key] += 1

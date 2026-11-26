@@ -1,9 +1,12 @@
 """A tool-using agent: the LLM decides which tools to call, we run them, and loop.
 
 Loop: send goal + tool list -> model answers or requests tool calls -> run each tool ->
-append results -> repeat, at most `agent_max_steps` times.
-All tools are read-only (least privilege): the agent can look things up but cannot
-change data. Every step is recorded in a trace that the API returns.
+append results -> repeat, at most `agent_max_steps` times. Every step is recorded in a trace
+that the API returns.
+
+Tools are read-only over the knowledge base for now. The next step adds a tool that searches the
+registered literature sources and ingests what it finds (for diseases the knowledge base does
+not cover yet), limited to those sources only.
 """
 
 import json
@@ -15,21 +18,19 @@ from app.core.logging import logger
 from app.core.safety import wrap_untrusted
 from app.llm.client import LLMClient
 from app.llm.prompts import AGENT_SYSTEM
+from app.models import Article
 from app.services import retrieval_service, staleness_service, version_service
-from app.services.document_service import get_document, get_version
+from app.services.ingestion_service import get_version
 
 TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "search_documents",
-            "description": "Search the latest document versions; returns relevant passages with node keys.",
+            "name": "search_knowledge_base",
+            "description": "Search the stored medical articles; returns relevant passages with article ids.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "What to look for"},
-                    "document_name": {"type": "string", "description": "Optional: limit to one document"},
-                },
+                "properties": {"query": {"type": "string", "description": "What to look for"}},
                 "required": ["query"],
             },
         },
@@ -38,11 +39,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_section",
-            "description": "Read the full text of a section (a heading's node key) in the latest version.",
+            "description": "Read a section (a heading's node key) of an article's latest version.",
             "parameters": {
                 "type": "object",
-                "properties": {"document_name": {"type": "string"}, "node_key": {"type": "string"}},
-                "required": ["document_name", "node_key"],
+                "properties": {"article_id": {"type": "integer"}, "node_key": {"type": "string"}},
+                "required": ["article_id", "node_key"],
             },
         },
     },
@@ -50,78 +51,74 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "compare_versions",
-            "description": "List what changed between two versions of a document (defaults: the last two).",
+            "description": "List what changed between two versions of an article (defaults: the last two).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "document_name": {"type": "string"},
+                    "article_id": {"type": "integer"},
                     "from_version": {"type": "string"},
                     "to_version": {"type": "string"},
                 },
-                "required": [],
+                "required": ["article_id"],
             },
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "list_stale_test_cases",
-            "description": "List generated test cases made stale by changes to their source text.",
-            "parameters": {
-                "type": "object",
-                "properties": {"document_name": {"type": "string"}},
-                "required": [],
-            },
+            "name": "list_stale_answers",
+            "description": "List past answers whose cited sources were later revised or retracted.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
 ]
 
 
-def _only_document_name(db: Session) -> str | None:
-    from sqlalchemy import select
-
-    from app.models import Document
-
-    names = db.scalars(select(Document.name)).all()
-    return names[0] if len(names) == 1 else None
+def _latest_changed_article(db: Session) -> int | None:
+    """Default for compare_versions when the model gives no id: the newest article with 2+ versions."""
+    for article in db.query(Article).order_by(Article.id.desc()).limit(200):
+        if len(article.versions) >= 2:
+            return article.id
+    return None
 
 
 def run_tool(db: Session, name: str, args: dict) -> dict:
-    doc_name = args.get("document_name") or _only_document_name(db)
-    if name == "search_documents":
-        hits = retrieval_service.search(db, args.get("query", ""), args.get("document_name"))
-        return {
-            "results": [
-                {"document": h.document, "version": h.version, "node_keys": h.node_keys, "text": h.chunk_text}
-                for h in hits
-            ]
-        }
+    if name == "search_knowledge_base":
+        hits = retrieval_service.search(db, args.get("query", ""))
+        results = []
+        for h in hits:
+            article = db.get(Article, h.article_id)
+            results.append(
+                {
+                    "article_id": h.article_id,
+                    "title": article.title,
+                    "node_keys": h.node_keys,
+                    "text": h.chunk_text,
+                }
+            )
+        return {"results": results}
     if name == "get_section":
-        version = get_version(db, doc_name) if doc_name else None
+        version = get_version(db, int(args.get("article_id") or 0))
         if not version:
-            return {"error": "Unknown document"}
+            return {"error": "Unknown article"}
         key = args.get("node_key", "")
         nodes = [n for n in version.nodes if n.node_key == key or n.node_key.startswith(key + "/")]
-        return (
-            {"section": [{"node_key": n.node_key, "text": n.text} for n in nodes]}
-            if nodes
-            else {"error": f"No section {key!r}"}
-        )
+        if not nodes:
+            return {"error": f"No section {key!r}"}
+        return {"section": [{"node_key": n.node_key, "text": n.text[:2000]} for n in nodes[:40]]}
     if name == "compare_versions":
-        if not doc_name:
-            return {"error": "Specify document_name"}
-        diff = version_service.diff_versions(db, doc_name, args.get("from_version"), args.get("to_version"))
+        article_id = args.get("article_id") or _latest_changed_article(db)
+        if not article_id:
+            return {"error": "No article has more than one version yet"}
+        diff = version_service.diff_versions(
+            db, int(article_id), args.get("from_version"), args.get("to_version")
+        )
         if "changes" in diff:
             diff["changes"] = diff["changes"][:20]
         return diff
-    if name == "list_stale_test_cases":
-        doc = get_document(db, doc_name) if doc_name else None
-        if not doc:
-            return {"error": "Specify document_name"}
-        arts = staleness_service.list_artifacts(db, doc.id, status="stale")
-        return {
-            "stale": [{"id": a.id, "title": a.payload.get("title"), "reason": a.stale_reason} for a in arts]
-        }
+    if name == "list_stale_answers":
+        answers = staleness_service.list_answers(db, status="stale", limit=20)
+        return {"stale": [{"id": a.id, "question": a.question, "reason": a.stale_reason} for a in answers]}
     return {"error": f"Unknown tool {name!r}"}
 
 

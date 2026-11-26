@@ -124,3 +124,6 @@ docker-compose.override.yml
 .pytest_cache/
 .ruff_cache/
 __pycache__/
+
+# Local data: SQLite database, stored figures and uploads
+data/

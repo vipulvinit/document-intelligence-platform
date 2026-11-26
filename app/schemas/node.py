@@ -6,14 +6,21 @@ from app.core.constants import NodeKind
 
 
 class RawBlock(BaseModel):
-    """A block of text as it comes out of a file, before structure is inferred."""
+    """A block of content as it comes out of a file, before structure is inferred."""
 
     text: str
     page: int | None = None
     font_size: float | None = None
     bold: bool = False
-    heading_level: int | None = None  # known directly for Markdown ("## Title" -> 2)
+    heading_level: int | None = None  # known directly for Markdown ("## Title" -> 2) and JATS XML
     is_list_item: bool = False
+    # Figures and tables
+    media_kind: NodeKind | None = None  # NodeKind.FIGURE or NodeKind.TABLE
+    label: str | None = None  # "Figure 2", "Table 1"
+    asset_ref: str | None = None  # figure image: file name in the article package
+    asset_bytes: bytes | None = Field(default=None, repr=False)  # image already in hand (from a PDF)
+    asset_ext: str | None = None  # "png", "jpeg"... for asset_bytes
+    table_markdown: str | None = None
 
     @field_validator("text")
     @classmethod
@@ -34,6 +41,10 @@ class ParsedNode(BaseModel):
     page: int | None = None
     position: int = Field(ge=0)
     content_hash: str = Field(min_length=64, max_length=64)
+    asset_ref: str | None = None
+    asset_bytes: bytes | None = Field(default=None, repr=False)
+    asset_ext: str | None = None
+    extra: dict = Field(default_factory=dict)  # label, caption, table_markdown
 
 
 class ParsedDocument(BaseModel):
@@ -63,5 +74,6 @@ class NodeOut(BaseModel):
     heading_path: str
     page: int | None
     change_type: str
+    object_key: str | None = None
 
     model_config = {"from_attributes": True}

@@ -1,7 +1,7 @@
+from app.models.answer import Answer, AnswerSource
+from app.models.article import Article, ArticleVersion
 from app.models.chunk import Chunk
-from app.models.document import Document
 from app.models.node import Node
-from app.models.selection import GeneratedArtifact, Selection
-from app.models.version import DocumentVersion
+from app.models.source import IngestionRun, Source
 
-__all__ = ["Chunk", "Document", "DocumentVersion", "Node", "Selection", "GeneratedArtifact"]
+__all__ = ["Answer", "AnswerSource", "Article", "ArticleVersion", "Chunk", "IngestionRun", "Node", "Source"]

@@ -7,30 +7,28 @@ from tests.conftest import SAMPLES
 
 
 def refs(name):
-    doc = build_hierarchy(extract_blocks(name, (SAMPLES / name).read_bytes()), "SOP")
+    doc = build_hierarchy(extract_blocks(name, (SAMPLES / name).read_bytes()), "Guideline")
     return [NodeRef(n.node_key, n.kind, n.text, n.content_hash, n.heading_path) for n in doc.nodes]
 
 
 def test_content_change_is_minor():
-    diff = summarize(match_nodes(refs("sop_v1.md"), refs("sop_v2.md")))
+    diff = summarize(match_nodes(refs("dengue_guideline_v1.md"), refs("dengue_guideline_v2.md")))
     assert diff.bump == "minor"
     kinds = {(c["change"], c["node_key"]) for c in diff.changes}
-    assert ("modified", "3-data-validation/3-2-query-management/p1") in kinds or (
-        "minor_edit",
-        "3-data-validation/3-2-query-management/p1",
-    ) in kinds
-    assert ("added", "2-roles/li3") in kinds
+    # "every 4 hours" -> "every 2 hours": 98% similar text, but a changed number is a real change
+    assert ("modified", "3-management/3-2-monitoring/p1") in kinds
+    assert ("added", "2-warning-signs/li3") in kinds
 
 
 def test_new_section_is_major_and_typo_is_cosmetic():
-    diff = summarize(match_nodes(refs("sop_v2.md"), refs("sop_v3.md")))
+    diff = summarize(match_nodes(refs("dengue_guideline_v2.md"), refs("dengue_guideline_v3.md")))
     assert diff.bump == "major"
     purpose = next(c for c in diff.changes if c["node_key"] == "1-purpose/p1")
     assert purpose["change"] == ChangeType.MINOR_EDIT
 
 
 def test_identical_upload_has_no_bump():
-    assert summarize(match_nodes(refs("sop_v1.md"), refs("sop_v1.md"))).bump is None
+    assert summarize(match_nodes(refs("dengue_guideline_v1.md"), refs("dengue_guideline_v1.md"))).bump is None
 
 
 def test_moved_paragraph_is_unchanged():
@@ -49,9 +47,9 @@ def test_moved_paragraph_is_unchanged():
 def test_meaning_change_detection():
     from app.versioning.matcher import meaning_changed
 
-    assert meaning_changed("within 5 days", "within 3 days")
-    assert meaning_changed("Records can be edited.", "Records can not be edited.")
-    assert not meaning_changed("collected, validated and locked", "collected, validated, and locked")
+    assert meaning_changed("500 mg twice daily", "250 mg twice daily")
+    assert meaning_changed("Aspirin is recommended.", "Aspirin is not recommended.")
+    assert not meaning_changed("fever, rash and joint pain", "fever, rash, and joint pain")
 
 
 def test_next_version():

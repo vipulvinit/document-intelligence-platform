@@ -1,15 +1,18 @@
-"""Text embeddings.
+"""Text embeddings (free, local).
 
 `fastembed` runs a small open-source model (BAAI/bge-small-en-v1.5, 384 dimensions) on CPU
 through ONNX, with no GPU or API key. `hashing` is a deterministic bag-of-words fallback
 (feature hashing of words and word pairs): weaker on meaning, but it needs no download,
 so tests and offline demos always work.
+
+Vectors are L2-normalised float32, so cosine similarity is a plain dot product.
 """
 
 import hashlib
-import math
 import re
 from functools import lru_cache
+
+import numpy as np
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -18,21 +21,23 @@ _DIM = 512
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 
+def _normalise(m: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(m, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return (m / norms).astype(np.float32)
+
+
 class HashingEmbedder:
     name = "hashing-512"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [self._one(t) for t in texts]
-
-    def _one(self, text: str) -> list[float]:
-        vec = [0.0] * _DIM
-        tokens = _TOKEN.findall(text.lower())
-        features = tokens + [f"{a}_{b}" for a, b in zip(tokens, tokens[1:])]
-        for f in features:
-            h = int(hashlib.md5(f.encode()).hexdigest(), 16)
-            vec[h % _DIM] += 1.0 if (h >> 9) % 2 else -1.0
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+    def embed(self, texts: list[str]) -> np.ndarray:
+        out = np.zeros((len(texts), _DIM), dtype=np.float32)
+        for row, text in enumerate(texts):
+            tokens = _TOKEN.findall(text.lower())
+            for f in tokens + [f"{a}_{b}" for a, b in zip(tokens, tokens[1:])]:
+                h = int(hashlib.md5(f.encode()).hexdigest(), 16)
+                out[row, h % _DIM] += 1.0 if (h >> 9) % 2 else -1.0
+        return _normalise(out)
 
 
 class FastEmbedder:
@@ -42,8 +47,10 @@ class FastEmbedder:
         self._model = TextEmbedding(model_name=model_name)
         self.name = model_name
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [vec.tolist() for vec in self._model.embed(texts)]
+    def embed(self, texts: list[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, 1), dtype=np.float32)
+        return _normalise(np.array(list(self._model.embed(texts)), dtype=np.float32))
 
 
 @lru_cache
@@ -57,8 +64,9 @@ def get_embedder():
     return HashingEmbedder()
 
 
-def cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a)) or 1.0
-    nb = math.sqrt(sum(y * y for y in b)) or 1.0
-    return dot / (na * nb)
+def to_bytes(vec: np.ndarray) -> bytes:
+    return np.asarray(vec, dtype=np.float32).tobytes()
+
+
+def from_bytes(data: bytes) -> np.ndarray:
+    return np.frombuffer(data, dtype=np.float32)

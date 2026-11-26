@@ -8,7 +8,6 @@ hallucinated sources.
 import json
 import re
 from difflib import SequenceMatcher
-from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -19,22 +18,7 @@ class Answer(BaseModel):
     answer: str = Field(min_length=1)
     citations: list[str] = []
     quotes: list[str] = []
-
-
-class TestCase(BaseModel):
-    id: str
-    title: str = Field(min_length=3)
-    objective: str
-    preconditions: list[str] = []
-    steps: list[str] = Field(min_length=1)
-    expected_result: str = Field(min_length=3)
-    priority: Literal["high", "medium", "low"]
-    source_node_keys: list[str] = Field(min_length=1)
-    evidence_quote: str = Field(min_length=5)
-
-
-class TestCaseSet(BaseModel):
-    test_cases: list[TestCase]
+    alias_map: dict[str, str] = Field(default_factory=dict, exclude=True)  # "S1" -> real citation key
 
 
 def _letters(text: str) -> str:
@@ -79,22 +63,3 @@ def validate_answer(raw: str | None, context: dict[str, str]) -> tuple[Answer | 
         if not quote_supported(q, cited_text):
             errors.append(f"quote not found in cited excerpts: {q[:80]!r}")
     return (ans if not errors else None), errors
-
-
-def validate_test_cases(raw: str | None, context: dict[str, str]) -> tuple[TestCaseSet | None, list[str]]:
-    data, errors = parse_json(raw)
-    if errors:
-        return None, errors
-    try:
-        tcs = TestCaseSet.model_validate(data)
-    except ValidationError as exc:
-        return None, [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
-    for tc in tcs.test_cases:
-        unknown = [k for k in tc.source_node_keys if k not in context]
-        if unknown:
-            errors.append(f"{tc.id}: source keys not in excerpts: {unknown}")
-            continue
-        source = " ".join(context[k] for k in tc.source_node_keys)
-        if not quote_supported(tc.evidence_quote, source):
-            errors.append(f"{tc.id}: evidence quote not found in its sources")
-    return (tcs if not errors else None), errors

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic JATS article for tests. Not a real publication and not medical guidance. -->
+<article xmlns:xlink="http://www.w3.org/1999/xlink" article-type="research-article" xml:lang="en">
+  <front>
+    <journal-meta>
+      <journal-title-group><journal-title>Journal of Synthetic Test Medicine</journal-title></journal-title-group>
+    </journal-meta>
+    <article-meta>
+      <article-id pub-id-type="pmcid">PMC9990001</article-id>
+      <article-id pub-id-type="pmid">99990001</article-id>
+      <article-id pub-id-type="doi">10.0000/synthetic.0001</article-id>
+      <title-group><article-title>Oral rehydration in <italic>Vibrio cholerae</italic> infection: a synthetic trial</article-title></title-group>
+      <contrib-group>
+        <contrib contrib-type="author"><name><surname>Rao</surname><given-names>A.</given-names></name></contrib>
+        <contrib contrib-type="author"><collab>Synthetic Trials Group</collab></contrib>
+      </contrib-group>
+      <pub-date pub-type="epub"><day>3</day><month>11</month><year>2026</year></pub-date>
+      <permissions>
+        <license xlink:href="https://creativecommons.org/licenses/by/4.0/"><license-p>CC BY 4.0</license-p></license>
+      </permissions>
+      <abstract>
+        <sec><title>Background</title><p>Cholera causes rapid dehydration through watery diarrhoea.</p></sec>
+        <sec><title>Results</title><p>Low-osmolarity oral rehydration solution reduced stool output compared with standard solution.</p></sec>
+      </abstract>
+    </article-meta>
+  </front>
+  <body>
+    <sec id="s1">
+      <title>Introduction</title>
+      <p>Dehydration is the main cause of death in cholera <xref ref-type="bibr" rid="r1">[1]</xref>. Early rehydration saves lives.</p>
+    </sec>
+    <sec id="s2">
+      <title>Methods</title>
+      <sec id="s2a">
+        <title>Participants</title>
+        <p>Adults with acute watery diarrhoea were enrolled at two synthetic sites.</p>
+        <list list-type="bullet">
+          <list-item><p>Age 18 to 65 years</p></list-item>
+          <list-item><p>Stool culture positive for Vibrio cholerae</p></list-item>
+        </list>
+      </sec>
+    </sec>
+    <sec id="s3">
+      <title>Results</title>
+      <p>Stool output fell faster with low-osmolarity solution (<xref ref-type="fig" rid="f1">Figure 1</xref>; <xref ref-type="table" rid="t1">Table 1</xref>).
+        <fig id="f1">
+          <label>Figure 1</label>
+          <caption><p>Cumulative stool output over 48 hours in the two treatment groups.</p></caption>
+          <graphic xlink:href="synthetic-g001"/>
+        </fig>
+      </p>
+      <table-wrap id="t1">
+        <label>Table 1</label>
+        <caption><p>Primary outcomes by treatment group.</p></caption>
+        <table>
+          <thead><tr><th>Outcome</th><th>Low-osmolarity ORS</th><th>Standard ORS</th></tr></thead>
+          <tbody>
+            <tr><td>Stool output (ml/kg)</td><td>180</td><td>240</td></tr>
+            <tr><td>Need for IV fluids</td><td colspan="2">Not significantly different</td></tr>
+          </tbody>
+        </table>
+        <table-wrap-foot><p>ORS, oral rehydration solution.</p></table-wrap-foot>
+      </table-wrap>
+    </sec>
+    <sec id="s4">
+      <title>Conclusions</title>
+      <p>Low-osmolarity oral rehydration solution is effective for adults with cholera.</p>
+    </sec>
+    <sec sec-type="COI-statement"><title>Declaration of interests</title><p>None declared.</p></sec>
+    <sec><title>Funding</title><p>Synthetic funder.</p></sec>
+  </body>
+  <back>
+    <ref-list><ref id="r1"><mixed-citation>Synthetic reference.</mixed-citation></ref></ref-list>
+  </back>
+</article>
